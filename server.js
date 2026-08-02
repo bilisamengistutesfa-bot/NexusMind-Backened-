@@ -69,15 +69,15 @@ app.use((err, req, res, next) => {
   });
 });
 
-// MongoDB connection
+// MongoDB connection (optional for Firebase-based setup)
 const connectDB = async () => {
   try {
     const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/nexusmind';
     await mongoose.connect(mongoUri);
     console.log('MongoDB connected successfully');
   } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
+    console.warn('MongoDB connection failed (continuing without MongoDB):', error.message);
+    console.log('Server will run with Firebase-only mode');
   }
 };
 
