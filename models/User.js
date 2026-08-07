@@ -5,7 +5,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
-  avatar: { type: String, default: 'https://picsum.photos/seed/default/100/100' },
+  avatar: { type: String, default: 'https://picsum.photos/seed/default/100/100', maxlength: 100000 },
   bio: { type: String, default: '' },
   reputation: { type: Number, default: 0 },
   

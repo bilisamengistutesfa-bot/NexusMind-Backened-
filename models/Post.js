@@ -38,7 +38,7 @@ const postSchema = new mongoose.Schema({
   category: { type: String, required: true },
   title: { type: String },
   content: { type: String, required: true },
-  imageUrl: { type: String, maxlength: 2000 }, // Allow Firebase Storage URLs
+  imageUrl: { type: String, maxlength: 100000 }, // Allow larger base64 strings
   videoUrl: String,
   gifUrl: String,
   timestamp: { type: Date, default: Date.now },
