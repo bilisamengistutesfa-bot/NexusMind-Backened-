@@ -8,6 +8,7 @@ const router = express.Router();
 router.get('/', verifyFirebaseToken, async (req, res) => {
   try {
     const posts = await Post.find().sort({ timestamp: -1 }).limit(50);
+    console.log('Returning posts from backend, count:', posts.length);
     res.json(posts);
   } catch (error) {
     console.error('Get posts error:', error);
@@ -53,8 +54,12 @@ router.post('/', verifyFirebaseToken, async (req, res) => {
       solutions: []
     };
 
+    console.log('Creating post with data:', JSON.stringify(postData, null, 2));
+    console.log('Image URL length:', postData.imageUrl?.length || 0);
+
     const post = new Post(postData);
     await post.save();
+    console.log('Post saved successfully with ID:', post._id);
     res.json(post);
   } catch (error) {
     console.error('Create post error:', error);
