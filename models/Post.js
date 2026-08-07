@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const solutionSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  userId: { type: mongoose.Schema.Types.Mixed, required: true }, // Can be ObjectId or Firebase UID string
   userName: String,
   userAvatar: String,
   text: { type: String, required: true },
@@ -9,7 +9,7 @@ const solutionSchema = new mongoose.Schema({
   upvotes: { type: Number, default: 0 },
   helpful: { type: Number, default: 0 },
   replies: [{
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    userId: { type: mongoose.Schema.Types.Mixed }, // Can be ObjectId or Firebase UID string
     userName: String,
     userAvatar: String,
     text: String,
@@ -32,11 +32,11 @@ const pollSchema = new mongoose.Schema({
 });
 
 const postSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  userId: { type: mongoose.Schema.Types.Mixed, required: true }, // Can be ObjectId or Firebase UID string
   userName: String,
   userAvatar: String,
   category: { type: String, required: true },
-  title: { type: String, required: true },
+  title: { type: String },
   content: { type: String, required: true },
   imageUrl: String,
   videoUrl: String,
@@ -45,7 +45,7 @@ const postSchema = new mongoose.Schema({
   votes: { type: Number, default: 0 },
   solutions: [solutionSchema],
   isSolved: { type: Boolean, default: false },
-  taggedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  taggedUsers: [{ type: mongoose.Schema.Types.Mixed }], // Can be ObjectId or Firebase UID string
   emoji: String,
   location: String,
   locationCoordinates: {
