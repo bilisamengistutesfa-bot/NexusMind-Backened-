@@ -21,8 +21,8 @@ const userSchema = new mongoose.Schema({
   onboardingComplete: { type: Boolean, default: false },
   
   // Social
-  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  following: [{ type: mongoose.Schema.Types.Mixed }], // Can be ObjectId or Firebase UID string
+  followers: [{ type: mongoose.Schema.Types.Mixed }], // Can be ObjectId or Firebase UID string
   
   // Streak system
   streak: { type: Number, default: 0 },
