@@ -7,8 +7,13 @@ const router = express.Router();
 // Get all posts
 router.get('/', verifyFirebaseToken, async (req, res) => {
   try {
+    const { uid } = req.user;
+    console.log('GET /api/posts - User ID:', uid);
+    
     const posts = await Post.find().sort({ timestamp: -1 }).limit(50);
     console.log('Returning posts from backend, count:', posts.length);
+    console.log('Post IDs:', posts.map(p => p._id));
+    
     res.json(posts);
   } catch (error) {
     console.error('Get posts error:', error);
