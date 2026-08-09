@@ -12,9 +12,16 @@ router.get('/', verifyFirebaseToken, async (req, res) => {
     
     const posts = await Post.find().sort({ timestamp: -1 }).limit(50);
     console.log('Returning posts from backend, count:', posts.length);
-    console.log('Post IDs:', posts.map(p => p._id));
     
-    res.json(posts);
+    // Convert MongoDB _id to id for frontend compatibility
+    const postsWithId = posts.map(post => ({
+      ...post.toObject(),
+      id: post._id.toString()
+    }));
+    
+    console.log('Post IDs with id field:', postsWithId.map(p => p.id));
+    
+    res.json(postsWithId);
   } catch (error) {
     console.error('Get posts error:', error);
     res.status(500).json({ error: 'Failed to get posts' });
@@ -65,7 +72,14 @@ router.post('/', verifyFirebaseToken, async (req, res) => {
     const post = new Post(postData);
     await post.save();
     console.log('Post saved successfully with ID:', post._id);
-    res.json(post);
+    
+    // Return post with id field for frontend compatibility
+    const postWithId = {
+      ...post.toObject(),
+      id: post._id.toString()
+    };
+    
+    res.json(postWithId);
   } catch (error) {
     console.error('Create post error:', error);
     res.status(500).json({ error: 'Failed to create post' });
