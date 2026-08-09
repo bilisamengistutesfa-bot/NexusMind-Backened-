@@ -4,6 +4,79 @@ import { verifyFirebaseToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Search users by name or username (must come before /:userId)
+router.get('/search', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { q } = req.query;
+    console.log('Searching for users with query:', q);
+    
+    if (!q) {
+      return res.status(400).json({ error: 'Search query required' });
+    }
+    
+    const users = await User.find({
+      $or: [
+        { name: { $regex: q, $options: 'i' } },
+        { username: { $regex: q, $options: 'i' } }
+      ]
+    }).select('-firebaseUid -email');
+    
+    console.log('Found users:', users.length);
+    
+    // Convert MongoDB _id to id for frontend compatibility
+    const usersWithId = users.map(user => ({
+      ...user.toObject(),
+      id: user._id.toString()
+    }));
+    
+    res.json(usersWithId);
+  } catch (error) {
+    console.error('Search users error:', error);
+    res.status(500).json({ error: 'Failed to search users' });
+  }
+});
+
+// Get all users with optional search
+router.get('/', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { search } = req.query;
+    
+    if (search) {
+      // Search users by name or username
+      console.log('Searching for users with query:', search);
+      
+      const users = await User.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { username: { $regex: search, $options: 'i' } }
+        ]
+      }).select('-firebaseUid -email');
+      
+      console.log('Found users:', users.length);
+      
+      // Convert MongoDB _id to id for frontend compatibility
+      const usersWithId = users.map(user => ({
+        ...user.toObject(),
+        id: user._id.toString()
+      }));
+      
+      res.json(usersWithId);
+    } else {
+      // Get all users
+      const users = await User.find().select('-firebaseUid -email');
+      // Convert MongoDB _id to id for frontend compatibility
+      const usersWithId = users.map(user => ({
+        ...user.toObject(),
+        id: user._id.toString()
+      }));
+      res.json(usersWithId);
+    }
+  } catch (error) {
+    console.error('Get all users error:', error);
+    res.status(500).json({ error: 'Failed to get users' });
+  }
+});
+
 // Get user by ID (supports both MongoDB ObjectId and Firebase UID)
 router.get('/:userId', verifyFirebaseToken, async (req, res) => {
   try {
