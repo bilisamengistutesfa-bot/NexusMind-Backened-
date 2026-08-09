@@ -146,21 +146,30 @@ router.get('/:userId/profile', verifyFirebaseToken, async (req, res) => {
 router.post('/profile', verifyFirebaseToken, async (req, res) => {
   try {
     const { uid } = req.user;
-    const { name, username, bio, interests, avatar } = req.body;
+    const { name, username, bio, interests, avatar, id } = req.body;
+    
+    console.log('Creating/updating profile for Firebase UID:', uid);
+    console.log('Profile data:', { name, username, bio, interests, avatar });
+
+    // Use Firebase UID if provided, otherwise use the id from body
+    const firebaseUidToUse = id || uid;
 
     const user = await User.findOneAndUpdate(
-      { firebaseUid: uid },
+      { firebaseUid: firebaseUidToUse },
       { 
         name, 
         username, 
         bio, 
         interests, 
         avatar,
+        firebaseUid: firebaseUidToUse,
         updatedAt: Date.now()
       },
       { new: true, upsert: true }
     );
 
+    console.log('Profile saved/updated in MongoDB:', user.username);
+    
     res.json({ success: true, user });
   } catch (error) {
     console.error('Create profile error:', error);

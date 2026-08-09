@@ -8,11 +8,13 @@ const router = express.Router();
 router.post('/verify', verifyFirebaseToken, async (req, res) => {
   try {
     const { uid, email } = req.user;
+    console.log('Auth verify - Firebase UID:', uid, 'Email:', email);
 
     // Find or create user
     let user = await User.findOne({ firebaseUid: uid });
     
     if (!user) {
+      console.log('User not found, creating new user for Firebase UID:', uid);
       // Create new user
       user = new User({
         firebaseUid: uid,
@@ -24,14 +26,17 @@ router.post('/verify', verifyFirebaseToken, async (req, res) => {
         onboardingComplete: false
       });
       await user.save();
+      console.log('New user created in MongoDB:', user.username);
+    } else {
+      console.log('Existing user found:', user.username);
     }
 
     res.json({ 
       valid: true, 
-      userId: user._id,
+      userId: user._id.toString(),
       firebaseUid: uid,
       user: {
-        id: user._id,
+        id: user._id.toString(),
         firebaseUid: user.firebaseUid,
         name: user.name,
         username: user.username,
