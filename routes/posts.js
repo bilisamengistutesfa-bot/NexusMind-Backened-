@@ -296,20 +296,25 @@ router.post('/:postId/solutions/:solutionId/accept', verifyFirebaseToken, async 
 // Add reply to solution
 router.post('/:postId/solutions/:solutionId/replies', verifyFirebaseToken, async (req, res) => {
   try {
+    const { uid } = req.user;
     const { userId, userName, userAvatar, text } = req.body;
+    console.log('Add reply request - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Solution ID:', req.params.solutionId);
+    
     const post = await Post.findById(req.params.postId);
     
     if (!post) {
+      console.log('Post not found:', req.params.postId);
       return res.status(404).json({ error: 'Post not found' });
     }
 
     const solution = post.solutions.id(req.params.solutionId);
     if (!solution) {
+      console.log('Solution not found:', req.params.solutionId);
       return res.status(404).json({ error: 'Solution not found' });
     }
 
     const reply = {
-      userId,
+      userId: uid, // Use Firebase UID
       userName,
       userAvatar,
       text,
@@ -318,6 +323,7 @@ router.post('/:postId/solutions/:solutionId/replies', verifyFirebaseToken, async
 
     solution.replies.push(reply);
     await post.save();
+    console.log('Reply added successfully to solution:', req.params.solutionId);
 
     res.json({ success: true, reply });
   } catch (error) {
