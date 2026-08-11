@@ -121,16 +121,21 @@ router.delete('/:postId', verifyFirebaseToken, async (req, res) => {
 // Vote on post
 router.post('/:postId/vote', verifyFirebaseToken, async (req, res) => {
   try {
+    const { uid } = req.user;
     const { userId, voteType } = req.body;
+    console.log('Vote request - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Vote type:', voteType);
+    
     const post = await Post.findById(req.params.postId);
     
     if (!post) {
+      console.log('Post not found:', req.params.postId);
       return res.status(404).json({ error: 'Post not found' });
     }
 
     const delta = voteType === 'up' ? 1 : -1;
     post.votes += delta;
     await post.save();
+    console.log('Vote successful - New vote count:', post.votes);
 
     res.json({ success: true, votes: post.votes });
   } catch (error) {
@@ -293,10 +298,74 @@ router.post('/:postId/solutions/:solutionId/replies', verifyFirebaseToken, async
 // Add comment
 router.post('/:postId/comments', verifyFirebaseToken, async (req, res) => {
   try {
-    res.json({ success: true });
+    const { uid } = req.user;
+    const { userId, userName, userAvatar, text } = req.body;
+    console.log('Add comment request - Firebase UID:', uid, 'Post ID:', req.params.postId);
+    
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Create comment object
+    const comment = {
+      id: `comment-${Date.now()}`,
+      userId: uid,
+      userName: userName || 'User',
+      userAvatar: userAvatar || 'https://picsum.photos/seed/default/100/100',
+      text,
+      timestamp: new Date()
+    };
+
+    // Add comment to post
+    post.comments.push(comment);
+    await post.save();
+    console.log('Comment added to post:', req.params.postId);
+    
+    res.json({ success: true, comment });
   } catch (error) {
     console.error('Add comment error:', error);
     res.status(500).json({ error: 'Failed to add comment' });
+  }
+});
+
+// Delete comment
+router.delete('/:postId/comments/:commentId', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const { postId, commentId } = req.params;
+    console.log('Delete comment request - Firebase UID:', uid, 'Post ID:', postId, 'Comment ID:', commentId);
+    
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Remove comment from post
+    post.comments = post.comments.filter((c: any) => c.id !== commentId);
+    await post.save();
+    console.log('Comment deleted from post:', postId);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete comment error:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
+  }
+});
+
+// Get comments for a post
+router.get('/:postId/comments', verifyFirebaseToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    
+    console.log('Returning comments for post:', req.params.postId, 'Count:', post.comments.length);
+    res.json(post.comments || []);
+  } catch (error) {
+    console.error('Get comments error:', error);
+    res.status(500).json({ error: 'Failed to get comments' });
   }
 });
 

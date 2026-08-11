@@ -19,6 +19,15 @@ const solutionSchema = new mongoose.Schema({
   imageUrl: String
 });
 
+const commentSchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  userId: { type: mongoose.Schema.Types.Mixed, required: true }, // Can be ObjectId or Firebase UID string
+  userName: String,
+  userAvatar: String,
+  text: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now }
+});
+
 const pollOptionSchema = new mongoose.Schema({
   id: String,
   text: String,
@@ -44,6 +53,7 @@ const postSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
   votes: { type: Number, default: 0 },
   solutions: [solutionSchema],
+  comments: [commentSchema],
   isSolved: { type: Boolean, default: false },
   taggedUsers: [{ type: mongoose.Schema.Types.Mixed }], // Can be ObjectId or Firebase UID string
   emoji: String,
