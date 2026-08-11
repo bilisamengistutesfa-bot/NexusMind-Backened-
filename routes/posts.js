@@ -153,13 +153,18 @@ router.post('/:postId/vote', verifyFirebaseToken, async (req, res) => {
 // Add solution
 router.post('/:postId/solutions', verifyFirebaseToken, async (req, res) => {
   try {
+    const { uid } = req.user;
+    console.log('Add solution request - Firebase UID:', uid, 'Post ID:', req.params.postId);
+    
     const post = await Post.findById(req.params.postId);
     if (!post) {
+      console.log('Post not found:', req.params.postId);
       return res.status(404).json({ error: 'Post not found' });
     }
 
     const solution = {
       ...req.body,
+      userId: uid, // Use Firebase UID
       timestamp: new Date(),
       upvotes: 0,
       helpful: 0,
@@ -168,6 +173,7 @@ router.post('/:postId/solutions', verifyFirebaseToken, async (req, res) => {
 
     post.solutions.push(solution);
     await post.save();
+    console.log('Solution added successfully - Solution ID:', solution.id || 'pending');
 
     res.json({ success: true, solution: post.solutions[post.solutions.length - 1] });
   } catch (error) {
@@ -179,23 +185,29 @@ router.post('/:postId/solutions', verifyFirebaseToken, async (req, res) => {
 // Vote on solution
 router.post('/:postId/solutions/:solutionId/vote', verifyFirebaseToken, async (req, res) => {
   try {
+    const { uid } = req.user;
     const { userId, voteType } = req.body;
+    console.log('Vote solution request - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Solution ID:', req.params.solutionId, 'Vote type:', voteType);
+    
     const post = await Post.findById(req.params.postId);
     
     if (!post) {
+      console.log('Post not found:', req.params.postId);
       return res.status(404).json({ error: 'Post not found' });
     }
 
     const solution = post.solutions.id(req.params.solutionId);
     if (!solution) {
+      console.log('Solution not found:', req.params.solutionId);
       return res.status(404).json({ error: 'Solution not found' });
     }
 
     const delta = voteType === 'up' ? 1 : -1;
     solution.upvotes += delta;
     await post.save();
+    console.log('Solution vote successful - New upvote count:', solution.upvotes);
 
-    res.json({ success: true });
+    res.json({ success: true, upvotes: solution.upvotes });
   } catch (error) {
     console.error('Vote solution error:', error);
     res.status(500).json({ error: 'Failed to vote on solution' });
@@ -205,22 +217,28 @@ router.post('/:postId/solutions/:solutionId/vote', verifyFirebaseToken, async (r
 // Mark solution as helpful
 router.post('/:postId/solutions/:solutionId/helpful', verifyFirebaseToken, async (req, res) => {
   try {
+    const { uid } = req.user;
     const { userId } = req.body;
+    console.log('Mark solution helpful request - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Solution ID:', req.params.solutionId);
+    
     const post = await Post.findById(req.params.postId);
     
     if (!post) {
+      console.log('Post not found:', req.params.postId);
       return res.status(404).json({ error: 'Post not found' });
     }
 
     const solution = post.solutions.id(req.params.solutionId);
     if (!solution) {
+      console.log('Solution not found:', req.params.solutionId);
       return res.status(404).json({ error: 'Solution not found' });
     }
 
     solution.helpful += 1;
     await post.save();
+    console.log('Solution marked as helpful - New helpful count:', solution.helpful);
 
-    res.json({ success: true });
+    res.json({ success: true, helpful: solution.helpful });
   } catch (error) {
     console.error('Mark solution helpful error:', error);
     res.status(500).json({ error: 'Failed to mark solution as helpful' });
@@ -230,20 +248,26 @@ router.post('/:postId/solutions/:solutionId/helpful', verifyFirebaseToken, async
 // Accept solution
 router.post('/:postId/solutions/:solutionId/accept', verifyFirebaseToken, async (req, res) => {
   try {
+    const { uid } = req.user;
     const { userId } = req.body;
+    console.log('Accept solution request - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Solution ID:', req.params.solutionId);
+    
     const post = await Post.findById(req.params.postId);
     
     if (!post) {
+      console.log('Post not found:', req.params.postId);
       return res.status(404).json({ error: 'Post not found' });
     }
 
     // Verify that the requester is the post author
-    if (post.userId.toString() !== userId) {
+    if (post.userId.toString() !== uid && post.userId !== uid) {
+      console.log('Unauthorized: User is not post author');
       return res.status(403).json({ error: 'Only post author can accept solutions' });
     }
 
     const solution = post.solutions.id(req.params.solutionId);
     if (!solution) {
+      console.log('Solution not found:', req.params.solutionId);
       return res.status(404).json({ error: 'Solution not found' });
     }
 
@@ -260,6 +284,7 @@ router.post('/:postId/solutions/:solutionId/accept', verifyFirebaseToken, async 
     }
     
     await post.save();
+    console.log('Solution acceptance toggled - Accepted:', solution.accepted, 'Post solved:', post.isSolved);
 
     res.json({ success: true, accepted: solution.accepted });
   } catch (error) {
