@@ -180,14 +180,23 @@ router.post('/profile', verifyFirebaseToken, async (req, res) => {
 // Update user
 router.put('/:userId', verifyFirebaseToken, async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(
-      req.params.userId,
+    const { uid } = req.user;
+    const userId = req.params.userId;
+    console.log('Update user request - Firebase UID:', uid, 'User ID:', userId);
+    
+    // Use Firebase UID for user identification
+    const user = await User.findOneAndUpdate(
+      { firebaseUid: userId },
       req.body,
       { new: true }
     );
+    
     if (!user) {
+      console.log('User not found for update:', userId);
       return res.status(404).json({ error: 'User not found' });
     }
+    
+    console.log('User updated successfully:', user.username);
     res.json({ success: true, user });
   } catch (error) {
     console.error('Update user error:', error);
