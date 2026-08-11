@@ -123,7 +123,13 @@ router.post('/:postId/vote', verifyFirebaseToken, async (req, res) => {
   try {
     const { uid } = req.user;
     const { userId, voteType } = req.body;
-    console.log('Vote request - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Vote type:', voteType);
+    console.log('Vote request received - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Vote type:', voteType);
+    
+    // Check if post ID is valid
+    if (!req.params.postId || req.params.postId === 'undefined') {
+      console.log('Invalid post ID:', req.params.postId);
+      return res.status(400).json({ error: 'Invalid post ID' });
+    }
     
     const post = await Post.findById(req.params.postId);
     
