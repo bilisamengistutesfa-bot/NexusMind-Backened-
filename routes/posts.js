@@ -348,7 +348,7 @@ router.delete('/:postId/comments/:commentId', verifyFirebaseToken, async (req, r
     }
 
     // Remove comment from post
-    post.comments = post.comments.filter((c: any) => c.id !== commentId);
+    post.comments = post.comments.filter((c) => c.id !== commentId);
     await post.save();
     console.log('Comment deleted from post:', postId);
     
