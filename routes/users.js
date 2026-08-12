@@ -278,6 +278,80 @@ router.post('/by-interests', verifyFirebaseToken, async (req, res) => {
   }
 });
 
+// Save post
+router.post('/:userId/saved', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { postId } = req.body;
+    const user = await User.findOne({ firebaseUid: req.params.userId });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if post is already saved
+    const alreadySaved = user.savedPosts.some(saved => saved.postId === postId);
+    
+    if (alreadySaved) {
+      return res.json({ success: true, message: 'Post already saved' });
+    }
+
+    // Add post to saved posts
+    user.savedPosts.push({
+      postId,
+      savedAt: new Date()
+    });
+    
+    await user.save();
+    console.log('Post saved for user:', req.params.userId, 'Post ID:', postId);
+    
+    res.json({ success: true, message: 'Post saved successfully' });
+  } catch (error) {
+    console.error('Save post error:', error);
+    res.status(500).json({ error: 'Failed to save post' });
+  }
+});
+
+// Remove saved post
+router.delete('/:userId/saved/:postId', verifyFirebaseToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ firebaseUid: req.params.userId });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Remove post from saved posts
+    user.savedPosts = user.savedPosts.filter(saved => saved.postId !== req.params.postId);
+    
+    await user.save();
+    console.log('Post unsaved for user:', req.params.userId, 'Post ID:', req.params.postId);
+    
+    res.json({ success: true, message: 'Post removed from saved' });
+  } catch (error) {
+    console.error('Remove saved post error:', error);
+    res.status(500).json({ error: 'Failed to remove saved post' });
+  }
+});
+
+// Get saved posts for a user
+router.get('/:userId/saved', verifyFirebaseToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ firebaseUid: req.params.userId });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Return saved posts with post IDs and save dates
+    const savedPosts = user.savedPosts.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+    
+    res.json({ success: true, savedPosts });
+  } catch (error) {
+    console.error('Get saved posts error:', error);
+    res.status(500).json({ error: 'Failed to get saved posts' });
+  }
+});
+
 // Follow user
 router.post('/:userId/follow', verifyFirebaseToken, async (req, res) => {
   try {

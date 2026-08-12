@@ -25,6 +25,12 @@ const userSchema = new mongoose.Schema({
   following: [{ type: mongoose.Schema.Types.Mixed }], // Can be ObjectId or Firebase UID string
   followers: [{ type: mongoose.Schema.Types.Mixed }], // Can be ObjectId or Firebase UID string
   
+  // Saved posts
+  savedPosts: [{
+    postId: { type: mongoose.Schema.Types.Mixed }, // Can be ObjectId or Firebase UID string
+    savedAt: { type: Date, default: Date.now }
+  }],
+  
   // Streak system
   streak: { type: Number, default: 0 },
   longestStreak: { type: Number, default: 0 },
