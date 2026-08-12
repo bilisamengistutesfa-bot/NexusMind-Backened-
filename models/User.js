@@ -5,6 +5,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
+  password: { type: String }, // Optional for Google auth users
   avatar: { type: String, default: 'https://picsum.photos/seed/default/100/100', maxlength: 50000 },
   bio: { type: String, default: '' },
   reputation: { type: Number, default: 0 },
