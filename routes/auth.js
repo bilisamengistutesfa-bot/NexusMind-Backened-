@@ -65,7 +65,7 @@ router.post('/register', async (req, res) => {
       password: hashedPassword,
       name: displayName,
       username,
-      avatar: avatar || 'https://picsum.photos/seed/default/100/100',
+      avatar: avatar,
       reputation: 0,
       onboardingComplete: false
     });
@@ -149,20 +149,21 @@ router.post('/login', async (req, res) => {
 router.post('/verify', verifyFirebaseToken, async (req, res) => {
   try {
     const { uid, email } = req.user;
-    console.log('Auth verify - Firebase UID:', uid, 'Email:', email);
+    const { photoURL, displayName } = req.body;
+    console.log('Auth verify - Firebase UID:', uid, 'Email:', email, 'PhotoURL:', photoURL);
 
     // Find or create user
     let user = await User.findOne({ firebaseUid: uid });
     
     if (!user) {
       console.log('User not found, creating new user for Firebase UID:', uid);
-      // Create new user
+      // Create new user with Google profile image
       user = new User({
         firebaseUid: uid,
         email: email || '',
-        name: email?.split('@')[0] || 'User',
-        username: email?.split('@')[0] || 'user',
-        avatar: 'https://picsum.photos/seed/default/100/100',
+        name: displayName || email?.split('@')[0] || 'User',
+        username: (displayName || email?.split('@')[0] || 'user').toLowerCase().replace(/\s+/g, ''),
+        avatar: photoURL,
         reputation: 0,
         onboardingComplete: false
       });
@@ -170,6 +171,12 @@ router.post('/verify', verifyFirebaseToken, async (req, res) => {
       console.log('New user created in MongoDB via Google auth:', user.username);
     } else {
       console.log('Existing user found:', user.username);
+      // Update avatar if provided and user doesn't have one
+      if (photoURL && !user.avatar) {
+        user.avatar = photoURL;
+        await user.save();
+        console.log('Updated avatar for existing user:', user.username);
+      }
     }
 
     res.json({ 
