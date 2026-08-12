@@ -1,20 +1,54 @@
 import express from 'express';
 import Post from '../models/Post.js';
+import User from '../models/User.js';
 import { verifyFirebaseToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Get all posts
+// Get all posts with privacy filtering
 router.get('/', verifyFirebaseToken, async (req, res) => {
   try {
     const { uid } = req.user;
     console.log('GET /api/posts - User ID:', uid);
     
-    const posts = await Post.find().sort({ timestamp: -1 }).limit(50);
-    console.log('Returning posts from backend, count:', posts.length);
+    // Get current user's following list for connections privacy
+    const currentUser = await User.findOne({ firebaseUid: uid });
+    const following = currentUser?.following || [];
+    console.log('User following count:', following.length);
+    
+    // Get all posts and filter by privacy
+    const allPosts = await Post.find().sort({ timestamp: -1 }).limit(100);
+    
+    const filteredPosts = allPosts.filter(post => {
+      const privacy = post.privacy || 'public';
+      
+      // Public: visible to everyone
+      if (privacy === 'public') {
+        return true;
+      }
+      
+      // Connections: visible to followers of the author
+      if (privacy === 'connections') {
+        // Author can always see their own posts
+        if (post.userId === uid) {
+          return true;
+        }
+        // Followers can see connections posts
+        return following.includes(post.userId);
+      }
+      
+      // Private: only visible to author
+      if (privacy === 'private') {
+        return post.userId === uid;
+      }
+      
+      return false;
+    });
+    
+    console.log('Filtered posts count:', filteredPosts.length, 'from total:', allPosts.length);
     
     // Convert MongoDB _id to id for frontend compatibility
-    const postsWithId = posts.map(post => ({
+    const postsWithId = filteredPosts.map(post => ({
       ...post.toObject(),
       id: post._id.toString()
     }));
@@ -39,13 +73,50 @@ router.get('/all', verifyFirebaseToken, async (req, res) => {
   }
 });
 
-// Get single post
+// Get single post with privacy check
 router.get('/:postId', verifyFirebaseToken, async (req, res) => {
   try {
+    const { uid } = req.user;
     const post = await Post.findById(req.params.postId);
+    
     if (!post) {
       return res.status(404).json({ error: 'Post not found' });
     }
+    
+    // Check privacy permissions
+    const privacy = post.privacy || 'public';
+    
+    // Public: visible to everyone
+    if (privacy === 'public') {
+      return res.json(post);
+    }
+    
+    // Connections: visible to author and followers
+    if (privacy === 'connections') {
+      // Author can always see their own posts
+      if (post.userId === uid) {
+        return res.json(post);
+      }
+      
+      // Check if current user follows the author
+      const currentUser = await User.findOne({ firebaseUid: uid });
+      const following = currentUser?.following || [];
+      
+      if (following.includes(post.userId)) {
+        return res.json(post);
+      }
+      
+      return res.status(403).json({ error: 'You do not have permission to view this post' });
+    }
+    
+    // Private: only visible to author
+    if (privacy === 'private') {
+      if (post.userId === uid) {
+        return res.json(post);
+      }
+      return res.status(403).json({ error: 'You do not have permission to view this post' });
+    }
+    
     res.json(post);
   } catch (error) {
     console.error('Get post error:', error);
