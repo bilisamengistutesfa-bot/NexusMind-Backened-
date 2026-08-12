@@ -175,6 +175,48 @@ router.put('/:postId', verifyFirebaseToken, async (req, res) => {
   }
 });
 
+// Report post
+router.post('/:postId/report', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const { reason } = req.body;
+    
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Check if user already reported this post
+    const alreadyReported = post.reports?.some(report => report.reporterId === uid);
+    if (alreadyReported) {
+      return res.status(400).json({ error: 'You have already reported this post' });
+    }
+
+    // Get reporter name
+    const reporter = await User.findOne({ firebaseUid: uid });
+    const reporterName = reporter?.name || 'Anonymous';
+
+    // Add report
+    if (!post.reports) {
+      post.reports = [];
+    }
+    post.reports.push({
+      reporterId: uid,
+      reporterName,
+      reason: reason || 'Inappropriate content',
+      timestamp: new Date()
+    });
+
+    await post.save();
+    console.log('Post reported:', req.params.postId, 'by:', uid, 'reason:', reason);
+    
+    res.json({ success: true, message: 'Post reported successfully' });
+  } catch (error) {
+    console.error('Report post error:', error);
+    res.status(500).json({ error: 'Failed to report post' });
+  }
+});
+
 // Delete post
 router.delete('/:postId', verifyFirebaseToken, async (req, res) => {
   try {

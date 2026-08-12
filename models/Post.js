@@ -66,6 +66,14 @@ const postSchema = new mongoose.Schema({
   scheduledTime: Date,
   privacy: { type: String, enum: ['public', 'connections', 'private'], default: 'public' },
   
+  // Report system
+  reports: [{
+    reporterId: { type: mongoose.Schema.Types.Mixed }, // Can be ObjectId or Firebase UID string
+    reporterName: String,
+    reason: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
