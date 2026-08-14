@@ -74,6 +74,14 @@ const postSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now }
   }],
   
+  // Repost system
+  reposts: [{
+    userId: { type: mongoose.Schema.Types.Mixed }, // Can be ObjectId or Firebase UID string
+    userName: String,
+    userAvatar: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

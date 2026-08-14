@@ -503,6 +503,102 @@ router.delete('/:postId/comments/:commentId', verifyFirebaseToken, async (req, r
   }
 });
 
+// Report post
+router.post('/:postId/report', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const { reason } = req.body;
+    console.log('Report post request - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Reason:', reason);
+    
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Add report to post
+    const report = {
+      reporterId: uid,
+      reporterName: 'User', // You might want to fetch user name from User model
+      reason,
+      timestamp: new Date()
+    };
+
+    post.reports = post.reports || [];
+    post.reports.push(report);
+    await post.save();
+    console.log('Post reported successfully:', req.params.postId);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Report post error:', error);
+    res.status(500).json({ error: 'Failed to report post' });
+  }
+});
+
+// Repost post
+router.post('/:postId/repost', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const { userId } = req.body;
+    console.log('Repost post request - Firebase UID:', uid, 'Post ID:', req.params.postId);
+    
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Get user info for repost
+    const user = await User.findOne({ firebaseUid: uid });
+    const userName = user ? user.name : 'User';
+    const userAvatar = user ? user.avatar : 'https://picsum.photos/seed/default/100/100';
+
+    // Check if user already reposted this post
+    const existingRepostIndex = post.reposts ? post.reposts.findIndex(r => r.userId === uid) : -1;
+    
+    if (existingRepostIndex >= 0) {
+      // Remove repost (toggle off)
+      post.reposts.splice(existingRepostIndex, 1);
+      await post.save();
+      console.log('Post un-reposted:', req.params.postId);
+      res.json({ success: true, reposted: false });
+    } else {
+      // Add repost
+      const repost = {
+        userId: uid,
+        userName,
+        userAvatar,
+        timestamp: new Date()
+      };
+
+      post.reposts = post.reposts || [];
+      post.reposts.push(repost);
+      await post.save();
+      console.log('Post reposted successfully:', req.params.postId);
+      res.json({ success: true, reposted: true });
+    }
+  } catch (error) {
+    console.error('Repost post error:', error);
+    res.status(500).json({ error: 'Failed to repost post' });
+  }
+});
+
+// Get reposts for a post
+router.get('/:postId/reposts', verifyFirebaseToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Return reposts array
+    const reposts = post.reposts || [];
+    res.json(reposts);
+  } catch (error) {
+    console.error('Get reposts error:', error);
+    res.status(500).json({ error: 'Failed to get reposts' });
+  }
+});
+
 // Get comments for a post
 router.get('/:postId/comments', verifyFirebaseToken, async (req, res) => {
   try {
