@@ -10,12 +10,24 @@ router.post('/', verifyFirebaseToken, async (req, res) => {
   try {
     const { uid } = req.user;
     console.log('Feedback submission - Firebase UID:', uid);
+    console.log('Feedback data:', req.body);
     
     // Get user details from Firebase UID
-    const user = await User.findOne({ firebaseUid: uid });
+    let user = await User.findOne({ firebaseUid: uid });
+    
+    // If user doesn't exist in MongoDB, create minimal user record
     if (!user) {
-      console.log('User not found for feedback submission:', uid);
-      return res.status(404).json({ error: 'User not found' });
+      console.log('User not found in MongoDB, creating minimal user record for feedback');
+      user = new User({
+        firebaseUid: uid,
+        name: req.body.userName || 'Unknown User',
+        username: req.body.userName?.toLowerCase().replace(/\s+/g, '') || 'unknown',
+        email: req.body.email || `${uid}@firebase.auth`,
+        avatar: req.body.userAvatar || 'https://picsum.photos/seed/default/100/100',
+        reputation: 0
+      });
+      await user.save();
+      console.log('Created minimal user record:', user._id);
     }
 
     const feedback = new Feedback({
