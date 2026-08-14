@@ -1,8 +1,87 @@
 import express from 'express';
 import User from '../models/User.js';
+import Notification from '../models/Notification.js';
 import { verifyFirebaseToken } from '../middleware/auth.js';
+import firebaseAdmin from 'firebase-admin';
 
 const router = express.Router();
+
+// Initialize Firebase Admin for real-time notifications
+let firebaseApp;
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    firebaseApp = firebaseAdmin.initializeApp({
+      credential: firebaseAdmin.credential.cert(serviceAccount)
+    }, 'users-routes');
+  }
+} catch (error) {
+  console.warn('Firebase Admin not initialized in users routes');
+}
+
+// Helper function to create notification in MongoDB
+const createMongoNotification = async (notificationData) => {
+  try {
+    const notification = new Notification({
+      ...notificationData,
+      createdAt: new Date(),
+      read: false
+    });
+    await notification.save();
+    console.log('MongoDB notification created:', notification.type);
+  } catch (error) {
+    console.error('Error creating MongoDB notification:', error);
+  }
+};
+
+// Helper function to create notification in Firebase Realtime Database
+const createFirebaseNotification = async (notificationData) => {
+  try {
+    if (!firebaseApp) {
+      console.log('Firebase not available, skipping Firebase notification');
+      return;
+    }
+    
+    const { recipientId, type, title, message, fromUserId, fromUserName, fromUserAvatar, actionUrl } = notificationData;
+    
+    // Create notification in Firebase Realtime Database
+    const firebaseNotification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      userId: recipientId,
+      title,
+      message,
+      fromUserId,
+      fromUserName,
+      fromUserAvatar,
+      actionUrl,
+      isRead: false,
+      timestamp: Date.now()
+    };
+    
+    await firebaseAdmin.database().ref(`notifications/${recipientId}`).push(firebaseNotification);
+    console.log('Firebase notification created for user:', recipientId);
+  } catch (error) {
+    console.error('Error creating Firebase notification:', error);
+  }
+};
+
+// Helper function to create notification in both systems
+const createNotification = async (notificationData) => {
+  // Create in MongoDB
+  await createMongoNotification({
+    userId: notificationData.recipientId,
+    type: notificationData.type,
+    text: notificationData.message,
+    senderName: notificationData.fromUserName,
+    avatar: notificationData.fromUserAvatar,
+    actionUrl: notificationData.actionUrl,
+    metadata: notificationData.metadata
+  });
+  
+  // Create in Firebase for real-time delivery
+  await createFirebaseNotification(notificationData);
+};
 
 // Search users by name or username (must come before /:userId)
 router.get('/search', verifyFirebaseToken, async (req, res) => {
@@ -368,6 +447,22 @@ router.post('/:userId/follow', verifyFirebaseToken, async (req, res) => {
       targetUser.followers.push(req.params.userId);
       await user.save();
       await targetUser.save();
+
+      // Create notification for the user being followed
+      try {
+        await createNotification({
+          recipientId: targetUserId,
+          type: 'follow',
+          title: 'New Follower',
+          message: `${user.name} started following you`,
+          fromUserId: req.params.userId,
+          fromUserName: user.name,
+          fromUserAvatar: user.avatar,
+          actionUrl: `/profile/${req.params.userId}`
+        });
+      } catch (notificationError) {
+        console.error('Error creating follow notification:', notificationError);
+      }
     }
 
     res.json({ success: true });

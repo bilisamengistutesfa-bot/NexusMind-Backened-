@@ -1,9 +1,92 @@
 import express from 'express';
 import Post from '../models/Post.js';
 import User from '../models/User.js';
+import Notification from '../models/Notification.js';
 import { verifyFirebaseToken } from '../middleware/auth.js';
+import firebaseAdmin from 'firebase-admin';
 
 const router = express.Router();
+
+// Initialize Firebase Admin for real-time notifications
+let firebaseApp;
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    firebaseApp = firebaseAdmin.initializeApp({
+      credential: firebaseAdmin.credential.cert(serviceAccount)
+    }, 'posts-routes');
+  }
+} catch (error) {
+  console.warn('Firebase Admin not initialized in posts routes');
+}
+
+// Helper function to create notification in MongoDB
+const createMongoNotification = async (notificationData) => {
+  try {
+    const notification = new Notification({
+      ...notificationData,
+      createdAt: new Date(),
+      read: false
+    });
+    await notification.save();
+    console.log('MongoDB notification created:', notification.type);
+  } catch (error) {
+    console.error('Error creating MongoDB notification:', error);
+  }
+};
+
+// Helper function to create notification in Firebase Realtime Database
+const createFirebaseNotification = async (notificationData) => {
+  try {
+    if (!firebaseApp) {
+      console.log('Firebase not available, skipping Firebase notification');
+      return;
+    }
+    
+    const { recipientId, type, title, message, fromUserId, fromUserName, fromUserAvatar, postId, solutionId, actionUrl } = notificationData;
+    
+    // Create notification in Firebase Realtime Database
+    const firebaseNotification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      userId: recipientId,
+      title,
+      message,
+      fromUserId,
+      fromUserName,
+      fromUserAvatar,
+      postId,
+      solutionId,
+      actionUrl,
+      isRead: false,
+      timestamp: Date.now()
+    };
+    
+    await firebaseAdmin.database().ref(`notifications/${recipientId}`).push(firebaseNotification);
+    console.log('Firebase notification created for user:', recipientId);
+  } catch (error) {
+    console.error('Error creating Firebase notification:', error);
+  }
+};
+
+// Helper function to create notification in both systems
+const createNotification = async (notificationData) => {
+  // Create in MongoDB
+  await createMongoNotification({
+    userId: notificationData.recipientId,
+    type: notificationData.type,
+    text: notificationData.message,
+    senderName: notificationData.fromUserName,
+    avatar: notificationData.fromUserAvatar,
+    actionUrl: notificationData.actionUrl,
+    postId: notificationData.postId,
+    solutionId: notificationData.solutionId,
+    metadata: notificationData.metadata
+  });
+  
+  // Create in Firebase for real-time delivery
+  await createFirebaseNotification(notificationData);
+};
 
 // Get all posts with privacy filtering
 router.get('/', verifyFirebaseToken, async (req, res) => {
@@ -256,6 +339,28 @@ router.post('/:postId/vote', verifyFirebaseToken, async (req, res) => {
     await post.save();
     console.log('Vote successful - New vote count:', post.votes);
 
+    // Create notification for post author if voter is not the author
+    if (post.userId.toString() !== uid && voteType === 'up') {
+      try {
+        const voter = await User.findOne({ firebaseUid: uid });
+        if (voter) {
+          await createNotification({
+            recipientId: post.userId.toString(),
+            type: 'like',
+            title: 'New Like',
+            message: `${voter.name} liked your post`,
+            fromUserId: uid,
+            fromUserName: voter.name,
+            fromUserAvatar: voter.avatar,
+            postId: req.params.postId,
+            actionUrl: `/solutions/${req.params.postId}`
+          });
+        }
+      } catch (notificationError) {
+        console.error('Error creating vote notification:', notificationError);
+      }
+    }
+
     res.json({ success: true, votes: post.votes });
   } catch (error) {
     console.error('Vote post error:', error);
@@ -287,6 +392,33 @@ router.post('/:postId/solutions', verifyFirebaseToken, async (req, res) => {
     post.solutions.push(solution);
     await post.save();
     console.log('Solution added successfully - Solution ID:', solution.id || 'pending');
+
+    // Create notification for post author if solution author is not the post author
+    if (post.userId.toString() !== uid) {
+      try {
+        const solutionAuthor = await User.findOne({ firebaseUid: uid });
+        if (solutionAuthor) {
+          const solutionText = req.body.text || 'a solution';
+          const previewText = solutionText.length > 100 ? solutionText.substring(0, 100) + '...' : solutionText;
+          
+          await createNotification({
+            recipientId: post.userId.toString(),
+            type: 'solution',
+            title: 'New Solution',
+            message: `${solutionAuthor.name} posted a solution to your question`,
+            fromUserId: uid,
+            fromUserName: solutionAuthor.name,
+            fromUserAvatar: solutionAuthor.avatar,
+            postId: req.params.postId,
+            solutionId: solution.id,
+            actionUrl: `/solutions/${req.params.postId}`,
+            metadata: { previewText }
+          });
+        }
+      } catch (notificationError) {
+        console.error('Error creating solution notification:', notificationError);
+      }
+    }
 
     res.json({ success: true, solution: post.solutions[post.solutions.length - 1] });
   } catch (error) {
@@ -320,6 +452,29 @@ router.post('/:postId/solutions/:solutionId/vote', verifyFirebaseToken, async (r
     await post.save();
     console.log('Solution vote successful - New upvote count:', solution.upvotes);
 
+    // Create notification for solution author if voter is not the author
+    if (solution.userId.toString() !== uid && voteType === 'up') {
+      try {
+        const voter = await User.findOne({ firebaseUid: uid });
+        if (voter) {
+          await createNotification({
+            recipientId: solution.userId.toString(),
+            type: 'vote',
+            title: 'New Vote',
+            message: `${voter.name} voted on your solution`,
+            fromUserId: uid,
+            fromUserName: voter.name,
+            fromUserAvatar: voter.avatar,
+            postId: req.params.postId,
+            solutionId: req.params.solutionId,
+            actionUrl: `/solutions/${req.params.postId}`
+          });
+        }
+      } catch (notificationError) {
+        console.error('Error creating solution vote notification:', notificationError);
+      }
+    }
+
     res.json({ success: true, upvotes: solution.upvotes });
   } catch (error) {
     console.error('Vote solution error:', error);
@@ -350,6 +505,29 @@ router.post('/:postId/solutions/:solutionId/helpful', verifyFirebaseToken, async
     solution.helpful += 1;
     await post.save();
     console.log('Solution marked as helpful - New helpful count:', solution.helpful);
+
+    // Create notification for solution author if marker is not the author
+    if (solution.userId.toString() !== uid) {
+      try {
+        const marker = await User.findOne({ firebaseUid: uid });
+        if (marker) {
+          await createNotification({
+            recipientId: solution.userId.toString(),
+            type: 'solution',
+            title: 'Solution Marked Helpful',
+            message: `${marker.name} found your solution helpful`,
+            fromUserId: uid,
+            fromUserName: marker.name,
+            fromUserAvatar: marker.avatar,
+            postId: req.params.postId,
+            solutionId: req.params.solutionId,
+            actionUrl: `/solutions/${req.params.postId}`
+          });
+        }
+      } catch (notificationError) {
+        console.error('Error creating helpful notification:', notificationError);
+      }
+    }
 
     res.json({ success: true, helpful: solution.helpful });
   } catch (error) {
@@ -390,6 +568,29 @@ router.post('/:postId/solutions/:solutionId/accept', verifyFirebaseToken, async 
     // If accepting, mark post as solved
     if (solution.accepted) {
       post.isSolved = true;
+      
+      // Create notification for solution author
+      if (solution.userId.toString() !== uid) {
+        try {
+          const postAuthor = await User.findOne({ firebaseUid: uid });
+          if (postAuthor) {
+            await createNotification({
+              recipientId: solution.userId.toString(),
+              type: 'solution',
+              title: 'Solution Accepted',
+              message: `${postAuthor.name} accepted your solution`,
+              fromUserId: uid,
+              fromUserName: postAuthor.name,
+              fromUserAvatar: postAuthor.avatar,
+              postId: req.params.postId,
+              solutionId: req.params.solutionId,
+              actionUrl: `/solutions/${req.params.postId}`
+            });
+          }
+        } catch (notificationError) {
+          console.error('Error creating solution acceptance notification:', notificationError);
+        }
+      }
     } else {
       // Check if there are other accepted solutions
       const hasOtherAccepted = post.solutions.some(s => s.accepted && s.id !== req.params.solutionId);
@@ -438,6 +639,32 @@ router.post('/:postId/solutions/:solutionId/replies', verifyFirebaseToken, async
     await post.save();
     console.log('Reply added successfully to solution:', req.params.solutionId);
 
+    // Create notification for solution author if replier is not the author
+    if (solution.userId.toString() !== uid) {
+      try {
+        const replier = await User.findOne({ firebaseUid: uid });
+        if (replier) {
+          const replyPreview = text.length > 50 ? text.substring(0, 50) + '...' : text;
+          
+          await createNotification({
+            recipientId: solution.userId.toString(),
+            type: 'reply',
+            title: 'New Reply',
+            message: `${replier.name} replied to your solution: ${replyPreview}`,
+            fromUserId: uid,
+            fromUserName: replier.name,
+            fromUserAvatar: replier.avatar,
+            postId: req.params.postId,
+            solutionId: req.params.solutionId,
+            actionUrl: `/solutions/${req.params.postId}`,
+            metadata: { previewText: replyPreview }
+          });
+        }
+      } catch (notificationError) {
+        console.error('Error creating reply notification:', notificationError);
+      }
+    }
+
     res.json({ success: true, reply });
   } catch (error) {
     console.error('Add solution reply error:', error);
@@ -471,6 +698,31 @@ router.post('/:postId/comments', verifyFirebaseToken, async (req, res) => {
     post.comments.push(comment);
     await post.save();
     console.log('Comment added to post:', req.params.postId);
+
+    // Create notification for post author if commenter is not the author
+    if (post.userId.toString() !== uid) {
+      try {
+        const commenter = await User.findOne({ firebaseUid: uid });
+        if (commenter) {
+          const commentPreview = text.length > 50 ? text.substring(0, 50) + '...' : text;
+          
+          await createNotification({
+            recipientId: post.userId.toString(),
+            type: 'reply',
+            title: 'New Comment',
+            message: `${commenter.name} commented on your post: ${commentPreview}`,
+            fromUserId: uid,
+            fromUserName: commenter.name,
+            fromUserAvatar: commenter.avatar,
+            postId: req.params.postId,
+            actionUrl: `/solutions/${req.params.postId}`,
+            metadata: { previewText: commentPreview }
+          });
+        }
+      } catch (notificationError) {
+        console.error('Error creating comment notification:', notificationError);
+      }
+    }
     
     res.json({ success: true, comment });
   } catch (error) {
