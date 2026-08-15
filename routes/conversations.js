@@ -224,4 +224,72 @@ router.delete('/:conversationId', verifyFirebaseToken, async (req, res) => {
   }
 });
 
+// Update user online status
+router.post('/user-status', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { online } = req.body;
+    const { uid } = req.user;
+    
+    const user = await User.findOne({ firebaseUid: uid });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update user status (this could be stored in a separate UserStatus model or Redis for real-time)
+    // For now, we'll use a simple approach with lastActive timestamp
+    user.lastActiveDate = new Date();
+    await user.save();
+    
+    res.json({ success: true, online, lastSeen: Date.now() });
+  } catch (error) {
+    console.error('Update user status error:', error);
+    res.status(500).json({ error: 'Failed to update user status' });
+  }
+});
+
+// Get user online status
+router.get('/user-status/:userId', verifyFirebaseToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ firebaseUid: req.params.userId });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const lastActive = user.lastActiveDate ? new Date(user.lastActiveDate).getTime() : 0;
+    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+    const isOnline = lastActive > fiveMinutesAgo;
+    
+    res.json({ 
+      online: isOnline, 
+      lastSeen: lastActive 
+    });
+  } catch (error) {
+    console.error('Get user status error:', error);
+    res.status(500).json({ error: 'Failed to get user status' });
+  }
+});
+
+// Mark messages as read
+router.post('/:conversationId/read', verifyFirebaseToken, async (req, res) => {
+  try {
+    const conversation = await Conversation.findById(req.params.conversationId);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    // Mark all messages from other users as read
+    conversation.messages.forEach(msg => {
+      if (msg.senderId !== req.user.uid) {
+        msg.isRead = true;
+      }
+    });
+
+    await conversation.save();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Mark messages as read error:', error);
+    res.status(500).json({ error: 'Failed to mark messages as read' });
+  }
+});
+
 export default router;
