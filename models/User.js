@@ -34,7 +34,7 @@ const userSchema = new mongoose.Schema({
   // Streak system
   streak: { type: Number, default: 0 },
   longestStreak: { type: Number, default: 0 },
-  lastActiveDate: Date,
+  lastActiveDate: { type: Date, default: Date.now },
   streakFreezes: { type: Number, default: 0 },
   streakHistory: [Number],
   
