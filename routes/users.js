@@ -230,6 +230,15 @@ router.post('/profile', verifyFirebaseToken, async (req, res) => {
     console.log('Creating/updating profile for Firebase UID:', uid);
     console.log('Profile data:', { name, username, bio, interests, avatar });
 
+    // Validate interests - must be exactly 3
+    if (interests && interests.length !== 3) {
+      return res.status(400).json({ 
+        error: 'Users must select exactly 3 interests',
+        currentCount: interests.length,
+        requiredCount: 3
+      });
+    }
+
     // Use Firebase UID if provided, otherwise use the id from body
     const firebaseUidToUse = id || uid;
 
@@ -242,6 +251,7 @@ router.post('/profile', verifyFirebaseToken, async (req, res) => {
         interests, 
         avatar,
         firebaseUid: firebaseUidToUse,
+        onboardingComplete: interests && interests.length === 3, // Mark onboarding as complete if 3 interests
         updatedAt: Date.now()
       },
       { new: true, upsert: true }
@@ -287,9 +297,22 @@ router.put('/:userId', verifyFirebaseToken, async (req, res) => {
 router.put('/:userId/interests', verifyFirebaseToken, async (req, res) => {
   try {
     const { interests } = req.body;
+    
+    // Validate interests - must be exactly 3
+    if (!interests || interests.length !== 3) {
+      return res.status(400).json({ 
+        error: 'Users must have exactly 3 interests',
+        currentCount: interests ? interests.length : 0,
+        requiredCount: 3
+      });
+    }
+    
     const user = await User.findByIdAndUpdate(
       req.params.userId,
-      { interests },
+      { 
+        interests,
+        onboardingComplete: true // Mark onboarding as complete when interests are set
+      },
       { new: true }
     );
     if (!user) {
@@ -299,47 +322,6 @@ router.put('/:userId/interests', verifyFirebaseToken, async (req, res) => {
   } catch (error) {
     console.error('Update interests error:', error);
     res.status(500).json({ error: 'Failed to update interests' });
-  }
-});
-
-// Get all users
-router.get('/', verifyFirebaseToken, async (req, res) => {
-  try {
-    const { search } = req.query;
-    
-    if (search) {
-      // Search users by name or username
-      console.log('Searching for users with query:', search);
-      
-      const users = await User.find({
-        $or: [
-          { name: { $regex: search, $options: 'i' } },
-          { username: { $regex: search, $options: 'i' } }
-        ]
-      }).select('-firebaseUid -email');
-      
-      console.log('Found users:', users.length);
-      
-      // Convert MongoDB _id to id for frontend compatibility
-      const usersWithId = users.map(user => ({
-        ...user.toObject(),
-        id: user._id.toString()
-      }));
-      
-      res.json(usersWithId);
-    } else {
-      // Get all users
-      const users = await User.find().select('-firebaseUid -email');
-      // Convert MongoDB _id to id for frontend compatibility
-      const usersWithId = users.map(user => ({
-        ...user.toObject(),
-        id: user._id.toString()
-      }));
-      res.json(usersWithId);
-    }
-  } catch (error) {
-    console.error('Get all users error:', error);
-    res.status(500).json({ error: 'Failed to get users' });
   }
 });
 

@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import { verifyFirebaseToken } from '../middleware/auth.js';
 import firebaseAdmin from 'firebase-admin';
+import RecommendationAlgorithm from '../utils/recommendationAlgorithm.js';
 
 const router = express.Router();
 
@@ -88,7 +89,7 @@ const createNotification = async (notificationData) => {
   await createFirebaseNotification(notificationData);
 };
 
-// Get all posts with privacy filtering
+// Get all posts with privacy filtering and recommendation algorithm
 router.get('/', verifyFirebaseToken, async (req, res) => {
   try {
     const { uid } = req.user;
@@ -99,10 +100,12 @@ router.get('/', verifyFirebaseToken, async (req, res) => {
     const following = currentUser?.following || [];
     console.log('User following count:', following.length);
     
-    // Get all posts and filter by privacy
-    const allPosts = await Post.find().sort({ timestamp: -1 }).limit(100);
+    // Use recommendation algorithm to get personalized feed
+    const personalizedFeed = await RecommendationAlgorithm.getPersonalizedFeed(uid);
+    console.log('Personalized feed count:', personalizedFeed.length);
     
-    const filteredPosts = allPosts.filter(post => {
+    // Apply privacy filtering to personalized feed
+    const filteredPosts = personalizedFeed.filter(post => {
       const privacy = post.privacy || 'public';
       
       // Public: visible to everyone
@@ -128,12 +131,12 @@ router.get('/', verifyFirebaseToken, async (req, res) => {
       return false;
     });
     
-    console.log('Filtered posts count:', filteredPosts.length, 'from total:', allPosts.length);
+    console.log('Final filtered posts count:', filteredPosts.length);
     
-    // Convert MongoDB _id to id for frontend compatibility
+    // Convert MongoDB _id to id for frontend compatibility (already done in algorithm)
     const postsWithId = filteredPosts.map(post => ({
-      ...post.toObject(),
-      id: post._id.toString()
+      ...post,
+      id: post._id ? post._id.toString() : post.id
     }));
     
     console.log('Post IDs with id field:', postsWithId.map(p => p.id));
@@ -142,6 +145,63 @@ router.get('/', verifyFirebaseToken, async (req, res) => {
   } catch (error) {
     console.error('Get posts error:', error);
     res.status(500).json({ error: 'Failed to get posts' });
+  }
+});
+
+// Get category-specific feed with recommendation algorithm
+router.get('/category/:category', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const { category } = req.params;
+    console.log('GET /api/posts/category - User ID:', uid, 'Category:', category);
+    
+    // Use recommendation algorithm to get category-specific feed
+    const categoryFeed = await RecommendationAlgorithm.getCategoryFeed(category, uid);
+    console.log('Category feed count:', categoryFeed.length);
+    
+    // Get current user's following list for connections privacy
+    const currentUser = await User.findOne({ firebaseUid: uid });
+    const following = currentUser?.following || [];
+    
+    // Apply privacy filtering to category feed
+    const filteredPosts = categoryFeed.filter(post => {
+      const privacy = post.privacy || 'public';
+      
+      // Public: visible to everyone
+      if (privacy === 'public') {
+        return true;
+      }
+      
+      // Connections: visible to followers of the author
+      if (privacy === 'connections') {
+        // Author can always see their own posts
+        if (post.userId === uid) {
+          return true;
+        }
+        // Followers can see connections posts
+        return following.includes(post.userId);
+      }
+      
+      // Private: only visible to author
+      if (privacy === 'private') {
+        return post.userId === uid;
+      }
+      
+      return false;
+    });
+    
+    console.log('Final category posts count:', filteredPosts.length);
+    
+    // Convert MongoDB _id to id for frontend compatibility
+    const postsWithId = filteredPosts.map(post => ({
+      ...post,
+      id: post._id ? post._id.toString() : post.id
+    }));
+    
+    res.json(postsWithId);
+  } catch (error) {
+    console.error('Get category posts error:', error);
+    res.status(500).json({ error: 'Failed to get category posts' });
   }
 });
 

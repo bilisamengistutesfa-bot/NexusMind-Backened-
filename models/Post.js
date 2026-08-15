@@ -45,6 +45,7 @@ const postSchema = new mongoose.Schema({
   userName: String,
   userAvatar: String,
   category: { type: String, required: true },
+  interests: [String], // Interest tags for recommendation algorithm
   title: { type: String },
   content: { type: String, required: true },
   imageUrl: { type: String, maxlength: 50000 }, // 50KB limit for base64
