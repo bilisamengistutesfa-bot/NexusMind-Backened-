@@ -4,6 +4,7 @@ const solutionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.Mixed, required: true }, // Can be ObjectId or Firebase UID string
   userName: String,
   userAvatar: String,
+  title: String,
   text: { type: String, required: true },
   timestamp: { type: Date, default: Date.now },
   upvotes: { type: Number, default: 0 },
@@ -16,7 +17,8 @@ const solutionSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now }
   }],
   accepted: { type: Boolean, default: false },
-  imageUrl: String
+  imageUrl: String,
+  emoji: String
 });
 
 const commentSchema = new mongoose.Schema({

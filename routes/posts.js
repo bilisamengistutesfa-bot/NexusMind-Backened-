@@ -446,7 +446,10 @@ router.post('/:postId/solutions', verifyFirebaseToken, async (req, res) => {
       timestamp: new Date(),
       upvotes: 0,
       helpful: 0,
-      replies: []
+      replies: [],
+      title: req.body.title || '',
+      emoji: req.body.emoji || '',
+      imageUrl: req.body.imageUrl || ''
     };
 
     post.solutions.push(solution);
