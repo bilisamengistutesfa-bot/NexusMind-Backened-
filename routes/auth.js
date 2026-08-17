@@ -54,9 +54,18 @@ router.post('/register', async (req, res) => {
     // Generate Firebase UID (for compatibility)
     const firebaseUid = crypto.randomUUID();
 
-    // Create username from name
+    // Create username from name and ensure uniqueness
     const displayName = `${firstName} ${lastName}`;
-    const username = displayName.toLowerCase().replace(/\s+/g, '');
+    let username = displayName.toLowerCase().replace(/\s+/g, '');
+    
+    // Check if username exists and make it unique if needed
+    let usernameExists = await User.findOne({ username });
+    let counter = 1;
+    while (usernameExists) {
+      username = `${displayName.toLowerCase().replace(/\s+/g, '')}${counter}`;
+      usernameExists = await User.findOne({ username });
+      counter++;
+    }
 
     // Create new user
     const user = new User({
@@ -157,12 +166,23 @@ router.post('/verify', verifyFirebaseToken, async (req, res) => {
     
     if (!user) {
       console.log('User not found, creating new user for Firebase UID:', uid);
+      
+      // Create username from display name and ensure uniqueness
+      let username = (displayName || email?.split('@')[0] || 'user').toLowerCase().replace(/\s+/g, '');
+      let usernameExists = await User.findOne({ username });
+      let counter = 1;
+      while (usernameExists) {
+        username = `${(displayName || email?.split('@')[0] || 'user').toLowerCase().replace(/\s+/g, '')}${counter}`;
+        usernameExists = await User.findOne({ username });
+        counter++;
+      }
+      
       // Create new user with Google profile image
       user = new User({
         firebaseUid: uid,
         email: email || '',
         name: displayName || email?.split('@')[0] || 'User',
-        username: (displayName || email?.split('@')[0] || 'user').toLowerCase().replace(/\s+/g, ''),
+        username,
         avatar: photoURL,
         reputation: 0,
         onboardingComplete: false
