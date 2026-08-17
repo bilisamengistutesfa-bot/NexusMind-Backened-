@@ -476,43 +476,13 @@ router.delete('/:userId/follow/:targetUserId', verifyFirebaseToken, async (req, 
   }
 });
 
-// Get saved items
-router.get('/:userId/saved', verifyFirebaseToken, async (req, res) => {
+// Get activity log
+router.get('/:userId/activity', verifyFirebaseToken, async (req, res) => {
   try {
-    const user = await User.findById(req.params.userId).populate('savedItems');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json(user.savedItems || []);
+    res.json([]);
   } catch (error) {
-    console.error('Get saved items error:', error);
-    res.status(500).json({ error: 'Failed to get saved items' });
-  }
-});
-
-// Save item
-router.post('/:userId/saved', verifyFirebaseToken, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    // For now, just return success - implement proper saved items later
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Save item error:', error);
-    res.status(500).json({ error: 'Failed to save item' });
-  }
-});
-
-// Remove saved item
-router.delete('/:userId/saved/:itemId', verifyFirebaseToken, async (req, res) => {
-  try {
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Remove saved item error:', error);
-    res.status(500).json({ error: 'Failed to remove saved item' });
+    console.error('Get activity log error:', error);
+    res.status(500).json({ error: 'Failed to get activity log' });
   }
 });
 
