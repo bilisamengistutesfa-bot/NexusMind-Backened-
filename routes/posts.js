@@ -1,7 +1,6 @@
 import express from 'express';
 import Post from '../models/Post.js';
 import User from '../models/User.js';
-import Notification from '../models/Notification.js';
 import { verifyFirebaseToken } from '../middleware/auth.js';
 import firebaseAdmin from 'firebase-admin';
 import RecommendationAlgorithm from '../utils/recommendationAlgorithm.js';
@@ -21,26 +20,11 @@ try {
   console.warn('Firebase Admin not initialized in posts routes');
 }
 
-// Helper function to create notification in MongoDB
-const createMongoNotification = async (notificationData) => {
-  try {
-    const notification = new Notification({
-      ...notificationData,
-      createdAt: new Date(),
-      read: false
-    });
-    await notification.save();
-    console.log('MongoDB notification created:', notification.type);
-  } catch (error) {
-    console.error('Error creating MongoDB notification:', error);
-  }
-};
-
-// Helper function to create notification in Firebase Realtime Database
-const createFirebaseNotification = async (notificationData) => {
+// Helper function to create notification in Firebase Realtime Database only
+const createNotification = async (notificationData) => {
   try {
     if (!firebaseApp) {
-      console.log('Firebase not available, skipping Firebase notification');
+      console.log('Firebase not available, skipping notification');
       return;
     }
     
@@ -68,25 +52,6 @@ const createFirebaseNotification = async (notificationData) => {
   } catch (error) {
     console.error('Error creating Firebase notification:', error);
   }
-};
-
-// Helper function to create notification in both systems
-const createNotification = async (notificationData) => {
-  // Create in MongoDB
-  await createMongoNotification({
-    userId: notificationData.recipientId,
-    type: notificationData.type,
-    text: notificationData.message,
-    senderName: notificationData.fromUserName,
-    avatar: notificationData.fromUserAvatar,
-    actionUrl: notificationData.actionUrl,
-    postId: notificationData.postId,
-    solutionId: notificationData.solutionId,
-    metadata: notificationData.metadata
-  });
-  
-  // Create in Firebase for real-time delivery
-  await createFirebaseNotification(notificationData);
 };
 
 // Get all posts with privacy filtering and recommendation algorithm
@@ -286,6 +251,10 @@ router.post('/', verifyFirebaseToken, async (req, res) => {
     const post = new Post(postData);
     await post.save();
     console.log('Post saved successfully with ID:', post._id);
+    
+    // Clear all caches when new post is created (simple approach)
+    // For production, you might want more selective cache invalidation
+    RecommendationAlgorithm.clearUserCache('all');
     
     // Return post with id field for frontend compatibility
     const postWithId = {
@@ -732,6 +701,83 @@ router.post('/:postId/solutions/:solutionId/replies', verifyFirebaseToken, async
   } catch (error) {
     console.error('Add solution reply error:', error);
     res.status(500).json({ error: 'Failed to add solution reply' });
+  }
+});
+
+// Delete solution
+router.delete('/:postId/solutions/:solutionId', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    console.log('Delete solution request - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Solution ID:', req.params.solutionId);
+    
+    const post = await Post.findById(req.params.postId);
+    
+    if (!post) {
+      console.log('Post not found:', req.params.postId);
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const solution = post.solutions.id(req.params.solutionId);
+    if (!solution) {
+      console.log('Solution not found:', req.params.solutionId);
+      return res.status(404).json({ error: 'Solution not found' });
+    }
+
+    // Verify that the requester is the solution author
+    if (solution.userId.toString() !== uid) {
+      console.log('Unauthorized: User is not solution author');
+      return res.status(403).json({ error: 'Only solution author can delete solution' });
+    }
+
+    // Remove the solution
+    post.solutions.pull(req.params.solutionId);
+    await post.save();
+    console.log('Solution deleted successfully:', req.params.solutionId);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete solution error:', error);
+    res.status(500).json({ error: 'Failed to delete solution' });
+  }
+});
+
+// Update solution
+router.put('/:postId/solutions/:solutionId', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const { text, title } = req.body;
+    console.log('Update solution request - Firebase UID:', uid, 'Post ID:', req.params.postId, 'Solution ID:', req.params.solutionId);
+    
+    const post = await Post.findById(req.params.postId);
+    
+    if (!post) {
+      console.log('Post not found:', req.params.postId);
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const solution = post.solutions.id(req.params.solutionId);
+    if (!solution) {
+      console.log('Solution not found:', req.params.solutionId);
+      return res.status(404).json({ error: 'Solution not found' });
+    }
+
+    // Verify that the requester is the solution author
+    if (solution.userId.toString() !== uid) {
+      console.log('Unauthorized: User is not solution author');
+      return res.status(403).json({ error: 'Only solution author can edit solution' });
+    }
+
+    // Update solution fields
+    if (text !== undefined) solution.text = text;
+    if (title !== undefined) solution.title = title;
+    
+    await post.save();
+    console.log('Solution updated successfully:', req.params.solutionId);
+
+    res.json({ success: true, solution });
+  } catch (error) {
+    console.error('Update solution error:', error);
+    res.status(500).json({ error: 'Failed to update solution' });
   }
 });
 
